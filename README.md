@@ -19,6 +19,6 @@ The release build only includes the 64-bit ARM native libraries to keep the APK 
 
 ## Design
 
-`design/skanr-mockup.html` is the screen mockup and `design/logo.svg` the logo. App icon vectors are generated from the Geist font with `tools/make_logo.py`.
+`design/skanr-mockup.html` is the screen mockup and `design/logo.svg` the logo. `tools/make_logo.py` regenerates the logo from the Geist font: `python3 tools/make_logo.py app/src/main/res/font/geist.ttf design/logo.svg`.
 
 Fonts: [Geist](https://github.com/vercel/geist-font) and [Instrument Serif](https://github.com/Instrument/instrument-serif), both under the SIL Open Font License (see `licenses/`).
