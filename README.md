@@ -16,7 +16,16 @@ Needs JDK 17+ and the Android SDK (compileSdk 36).
 adb install -r app/build/outputs/apk/release/app-release.apk
 ```
 
-The release build only includes the 64-bit ARM native libraries to keep the APK small (about 16 MB).
+For the Play Store, build a signed bundle with `./gradlew bundleRelease`. Signing reads `keystore.properties` in the project root (not committed):
+
+```properties
+storeFile=/path/to/upload.jks
+storePassword=...
+keyAlias=upload
+keyPassword=...
+```
+
+Without that file, release builds fall back to the debug key.
 
 ## Design
 
