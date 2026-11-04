@@ -17,12 +17,6 @@ SHOTS = [
     (5, "share", "PDFs sized for where they're going."),
 ]
 
-ICON_FG = """
-<path fill="#F7F2ED" d="M44,38h20v32h-20z"/>
-<path fill="#B9A493" d="M47.5,43h10v2h-10zM47.5,49h13v1.2h-13zM47.5,53h13v1.2h-13zM47.5,57h13v1.2h-13zM47.5,61h8v1.2h-8z"/>
-<path fill="none" stroke="#F7F2ED" stroke-width="2.6" stroke-linecap="round" d="M36,38V32h6M66,32h6v6M72,70v6h-6M42,76h-6v-6"/>
-"""
-
 EXTRA_CSS = """
 body { margin: 0 !important; padding: 0 !important; overflow: hidden; background: var(--desk); }
 .ready { display: none !important; }
@@ -75,7 +69,7 @@ def main():
         </div>"""
         render(doc(feature), OUT / "feature-graphic.png", 512, 250, 2, work)
 
-        icon = f'<!doctype html><html><body style="margin:0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="512" height="512"><rect width="108" height="108" fill="#4B3122"/>{ICON_FG}</svg></body></html>'
+        icon = f'<!doctype html><html><body style="margin:0">{(ROOT / "design" / "icon.svg").read_text()}</body></html>'
         render(icon, OUT / "icon-512.png", 512, 512, 1, work)
 
 
