@@ -78,6 +78,7 @@ fun DocumentScreen(
     var renaming by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf<Int?>(null) }
     var sharing by remember { mutableStateOf(false) }
+    var viewing by remember { mutableStateOf<Int?>(null) }
     var toast by rememberSaveable { mutableStateOf(if (justSaved) "saved" else null) }
     var lastPageCount by remember { mutableIntStateOf(doc.pages.size) }
 
@@ -124,11 +125,8 @@ fun DocumentScreen(
             }
 
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-                val ratio = remember(doc.pages.getOrNull(current)) {
-                    doc.pages.getOrNull(current)?.let { pageRatio(DocStore.pageFile(doc, it)) } ?: A4
-                }
                 val maxPageHeight = maxHeight - 28.dp
-                val pageWidth = minOf(maxWidth - 112.dp, maxPageHeight * ratio)
+                val pageWidth = minOf(maxWidth - 112.dp, maxPageHeight * A4)
                 val side = (maxWidth - pageWidth) / 2
                 HorizontalPager(
                     state = pager,
@@ -139,15 +137,15 @@ fun DocumentScreen(
                 ) { index ->
                     val page = doc.pages.getOrNull(index) ?: return@HorizontalPager
                     val file = DocStore.pageFile(doc, page)
-                    val r = remember(file.path) { pageRatio(file) }
                     val offset = ((pager.currentPage - index) + pager.currentPageOffsetFraction).absoluteValue.coerceIn(0f, 1f)
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         PageImage(
                             file,
                             Modifier
                                 .fillMaxWidth()
-                                .aspectRatio(r, matchHeightConstraintsFirst = r < ratio)
-                                .graphicsLayer { alpha = 1f - offset * 0.5f },
+                                .aspectRatio(A4)
+                                .graphicsLayer { alpha = 1f - offset * 0.5f }
+                                .clickable(interactionSource = null, indication = null) { viewing = index },
                             maxSide = 1600,
                             raised = true,
                         )
@@ -204,6 +202,8 @@ fun DocumentScreen(
         }
     }
 
+    viewing?.let { PageViewer(DocStore.pageFiles(doc), it) { viewing = null } }
+
     if (renaming) RenameDialog(doc.name, onDismiss = { renaming = false }) { name ->
         renaming = false
         scope.launch { DocStore.rename(doc.id, name) }
@@ -231,7 +231,7 @@ fun DocumentScreen(
         )
     }
 
-    if (sharing) ShareSheet(doc, onDismiss = { sharing = false }) { message ->
+    if (sharing) ShareSheet(listOf(doc), onDismiss = { sharing = false }) { message ->
         sharing = false
         message?.let { toast = it }
     }
@@ -271,7 +271,6 @@ private fun Filmstrip(doc: Doc, current: Int, onSelect: (Int) -> Unit, onMove: (
     ) {
         doc.pages.forEachIndexed { index, page ->
             val file = DocStore.pageFile(doc, page)
-            val ratio = remember(file.path) { pageRatio(file) }
             val from = dragging
             val shift = when {
                 from == null || index == from -> 0f
@@ -307,7 +306,7 @@ private fun Filmstrip(doc: Doc, current: Int, onSelect: (Int) -> Unit, onMove: (
                     .padding(5.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                PageImage(file, Modifier.fillMaxWidth().aspectRatio(ratio), maxSide = 200)
+                PageImage(file, Modifier.fillMaxWidth().aspectRatio(A4), maxSide = 200)
             }
         }
         Box(

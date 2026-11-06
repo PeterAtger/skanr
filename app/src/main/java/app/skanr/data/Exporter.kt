@@ -46,25 +46,39 @@ object Exporter {
 
     fun pdfBytes(imageBytes: Long, pageCount: Int) = imageBytes + PDF_HEADER_AND_TRAILER + pageCount * PDF_PER_PAGE
 
-    suspend fun pdf(context: Context, doc: Doc, quality: Quality, searchable: Boolean): File = withContext(Dispatchers.Default) {
+    suspend fun export(context: Context, docs: List<Doc>, asPdf: Boolean, quality: Quality, searchable: Boolean): List<File> =
+        withContext(Dispatchers.Default) {
+            val dir = shareDir(context)
+            val used = mutableSetOf<String>()
+            docs.flatMap { doc ->
+                val base = uniqueName(safeName(doc.name), used)
+                if (asPdf) listOf(writePdf(context, doc, quality, searchable, File(dir, "$base.pdf"))) else images(context, doc, quality, dir, base)
+            }
+        }
+
+    private suspend fun writePdf(context: Context, doc: Doc, quality: Quality, searchable: Boolean, out: File): File {
         val images = pagesFor(context, doc, quality)
         val originals = DocStore.pageFiles(doc)
         val text = if (searchable) originals.map { Ocr.read(it) } else originals.map { null }
-        val out = File(shareDir(context), "${safeName(doc.name)}.pdf")
         out.outputStream().buffered().use { stream ->
             PdfWriter(stream).write(images.indices.map { i -> PdfPage(images[i], Images.size(originals[i]), text[i]) })
         }
-        out
+        return out
     }
 
-    suspend fun images(context: Context, doc: Doc, quality: Quality): List<File> = withContext(Dispatchers.IO) {
+    private suspend fun images(context: Context, doc: Doc, quality: Quality, dir: File, base: String): List<File> {
         val pages = pagesFor(context, doc, quality)
-        val dir = shareDir(context)
-        val base = safeName(doc.name)
-        pages.mapIndexed { i, page ->
+        return pages.mapIndexed { i, page ->
             val name = if (pages.size == 1) "$base.jpg" else "$base ${i + 1}.jpg"
             page.copyTo(File(dir, name), overwrite = true)
         }
+    }
+
+    private fun uniqueName(base: String, used: MutableSet<String>): String {
+        var name = base
+        var n = 2
+        while (!used.add(name.lowercase())) name = "$base (${n++})"
+        return name
     }
 
     fun shareIntent(context: Context, files: List<File>, mime: String): Intent {

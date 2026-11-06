@@ -46,7 +46,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ShareSheet(doc: Doc, onDismiss: () -> Unit, onDone: (String?) -> Unit) {
+fun ShareSheet(docs: List<Doc>, onDismiss: () -> Unit, onDone: (String?) -> Unit) {
     val t = LocalTokens.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -58,10 +58,13 @@ fun ShareSheet(doc: Doc, onDismiss: () -> Unit, onDone: (String?) -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     val pageBytes = remember { mutableStateMapOf<Quality, Long>() }
 
-    LaunchedEffect(doc.pages) {
-        pageBytes[Quality.Original] = DocStore.pageFiles(doc).sumOf { it.length() }
+    val pageCount = docs.sumOf { it.pages.size }
+    val title = if (docs.size == 1) "Share ${pagesLabel(pageCount)}" else "Share ${docs.size} documents"
+
+    LaunchedEffect(docs.map { it.pages }) {
+        pageBytes[Quality.Original] = docs.sumOf { doc -> DocStore.pageFiles(doc).sumOf { it.length() } }
         listOf(Quality.Standard, Quality.Small).forEach { q ->
-            pageBytes[q] = Exporter.pagesFor(context, doc, q).sumOf { it.length() }
+            pageBytes[q] = docs.sumOf { doc -> Exporter.pagesFor(context, doc, q).sumOf { it.length() } }
         }
     }
 
@@ -71,13 +74,13 @@ fun ShareSheet(doc: Doc, onDismiss: () -> Unit, onDone: (String?) -> Unit) {
         scope.launch {
             runCatching {
                 val mime = if (asPdf) "application/pdf" else "image/jpeg"
-                val files = if (asPdf) listOf(Exporter.pdf(context, doc, quality, searchable)) else Exporter.images(context, doc, quality)
+                val files = Exporter.export(context, docs, asPdf, quality, searchable)
                 if (save) {
                     Exporter.saveToDownloads(context, files, mime)
                 } else {
                     context.startActivity(Exporter.shareIntent(context, files, mime))
                 }
-                DocStore.markShared(doc.id)
+                docs.forEach { DocStore.markShared(it.id) }
             }.onSuccess {
                 busy = null
                 state.hide()
@@ -106,7 +109,7 @@ fun ShareSheet(doc: Doc, onDismiss: () -> Unit, onDone: (String?) -> Unit) {
                 .padding(start = 22.dp, end = 22.dp, top = 10.dp, bottom = 18.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("Share ${pagesLabel(doc.pages.size)}", style = Type.sheetTitle, color = t.graphite)
+            Text(title, style = Type.sheetTitle, color = t.graphite)
 
             Segmented(listOf("PDF", "Images"), if (asPdf) 0 else 1) { asPdf = it == 0 }
 
@@ -114,7 +117,7 @@ fun ShareSheet(doc: Doc, onDismiss: () -> Unit, onDone: (String?) -> Unit) {
                 Text("File size", style = Type.label, color = t.pencil)
                 Spacer(Modifier.height(4.dp))
                 Quality.entries.forEach { q ->
-                    val bytes = pageBytes[q]?.let { if (asPdf) Exporter.pdfBytes(it, doc.pages.size) else it }
+                    val bytes = pageBytes[q]?.let { if (asPdf) Exporter.pdfBytes(it, pageCount) else it }
                     QualityRow(q, selected = q == quality, size = bytes?.let(::formatBytes) ?: "…") { quality = q }
                 }
             }
@@ -146,7 +149,7 @@ fun ShareSheet(doc: Doc, onDismiss: () -> Unit, onDone: (String?) -> Unit) {
                     enabled = busy == null,
                 ) { run(save = true) }
                 PillButton(
-                    if (busy == "Preparing…") busy!! else if (asPdf) "Share PDF" else "Share images",
+                    if (busy == "Preparing…") busy!! else if (asPdf && docs.size == 1) "Share PDF" else if (asPdf) "Share PDFs" else "Share images",
                     Modifier.weight(1f),
                     enabled = busy == null,
                 ) { run(save = false) }

@@ -1,9 +1,12 @@
 package app.skanr.ui
 
 import android.text.format.DateFormat
+import android.widget.Toast as AndroidToast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,11 +15,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -33,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -51,6 +57,7 @@ import app.skanr.scan.Scanner
 import app.skanr.scan.ScannerStatus
 import app.skanr.ui.theme.LocalTokens
 import app.skanr.ui.theme.Type
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -65,6 +72,18 @@ fun HomeScreen(docs: List<Doc>, onOpen: (String) -> Unit, onScan: () -> Unit, wa
     val context = LocalContext.current
     var query by rememberSaveable { mutableStateOf("") }
     var settings by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf(setOf<String>()) }
+    var sharing by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val selectedDocs = docs.filter { it.id in selected }
+    val selecting = selectedDocs.isNotEmpty()
+
+    fun toggle(id: String) {
+        selected = if (id in selected) selected - id else selected + id
+    }
+
+    BackHandler(enabled = selecting) { selected = emptySet() }
 
     val shown = remember(docs, query) {
         val q = query.trim()
@@ -75,13 +94,24 @@ fun HomeScreen(docs: List<Doc>, onOpen: (String) -> Unit, onScan: () -> Unit, wa
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
-            Row(
-                Modifier.fillMaxWidth().padding(start = 14.dp, end = 10.dp, top = 10.dp, bottom = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Logo()
-                Spacer(Modifier.weight(1f))
-                IconTap(Icons.Settings, "Settings") { settings = true }
+            if (selecting) {
+                Row(
+                    Modifier.fillMaxWidth().height(62.dp).padding(start = 6.dp, end = 10.dp, top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconTap(Icons.Close, "Cancel") { selected = emptySet() }
+                    Text("${selectedDocs.size} selected", style = Type.title, color = t.graphite, modifier = Modifier.weight(1f).padding(start = 4.dp))
+                    IconTap(Icons.Delete, "Delete") { confirmDelete = true }
+                }
+            } else {
+                Row(
+                    Modifier.fillMaxWidth().height(62.dp).padding(start = 14.dp, end = 10.dp, top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Logo()
+                    Spacer(Modifier.weight(1f))
+                    IconTap(Icons.Settings, "Settings") { settings = true }
+                }
             }
             if (docs.isNotEmpty()) SearchField(query) { query = it }
 
@@ -107,7 +137,13 @@ fun HomeScreen(docs: List<Doc>, onOpen: (String) -> Unit, onScan: () -> Unit, wa
                             )
                         }
                         items(g.docs, key = { it.id }) { doc ->
-                            DocRow(doc, whenLabel(doc.created, timeFormat)) { onOpen(doc.id) }
+                            DocRow(
+                                doc = doc,
+                                whenText = whenLabel(doc.created, timeFormat),
+                                selected = doc.id in selected,
+                                onClick = { if (selecting) toggle(doc.id) else onOpen(doc.id) },
+                                onLongClick = { toggle(doc.id) },
+                            )
                         }
                     }
                     item { Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars)) }
@@ -133,11 +169,39 @@ fun HomeScreen(docs: List<Doc>, onOpen: (String) -> Unit, onScan: () -> Unit, wa
                 )
                 Spacer(Modifier.height(10.dp))
             }
-            ScanButton(onScan)
+            if (selecting) {
+                val label = if (selectedDocs.size == 1) "Share 1 document" else "Share ${selectedDocs.size} documents"
+                PillButton(label, Modifier.fillMaxWidth().padding(horizontal = 18.dp), icon = Icons.Share) { sharing = true }
+            } else {
+                ScanButton(onScan)
+            }
         }
     }
 
     if (settings) SettingsSheet(docs) { settings = false }
+
+    if (sharing) ShareSheet(selectedDocs, onDismiss = { sharing = false }) { message ->
+        sharing = false
+        selected = emptySet()
+        message?.let { AndroidToast.makeText(context, it, AndroidToast.LENGTH_SHORT).show() }
+    }
+
+    if (confirmDelete) {
+        val n = selectedDocs.size
+        ConfirmDialog(
+            title = if (n == 1) "Delete this document?" else "Delete $n documents?",
+            text = if (n == 1) "${selectedDocs.first().name} will be removed from this phone." else "They'll be removed from this phone.",
+            confirm = "Delete",
+            dismiss = "Cancel",
+            onConfirm = {
+                confirmDelete = false
+                val ids = selectedDocs.map { it.id }
+                selected = emptySet()
+                scope.launch { ids.forEach { DocStore.delete(it) } }
+            },
+            onDismiss = { confirmDelete = false },
+        )
+    }
 }
 
 @Composable
@@ -171,21 +235,40 @@ private fun SearchField(query: String, onChange: (String) -> Unit) {
 }
 
 @Composable
-private fun DocRow(doc: Doc, whenText: String, onClick: () -> Unit) {
+private fun DocRow(doc: Doc, whenText: String, selected: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
     val t = LocalTokens.current
     val first = doc.pages.firstOrNull()?.let { DocStore.pageFile(doc, it) }
-    val ratio = remember(first?.path) { first?.let(::pageRatio) ?: A4 }
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .background(if (selected) t.inkSoft else Color.Transparent)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 22.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(width = 50.dp, height = 62.dp), contentAlignment = Alignment.Center) {
-            if (first != null) {
-                val m = if (ratio >= 50f / 62f) Modifier.fillMaxWidth() else Modifier.height(62.dp)
-                PageImage(first, m.aspectRatio(ratio), maxSide = 200)
+        Box(Modifier.size(width = 50.dp, height = 62.dp)) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .then(if (selected) Modifier.brackets(t.ink, 8.dp, 2.dp).padding(5.dp) else Modifier),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (first != null) {
+                    PageImage(first, Modifier.fillMaxHeight().aspectRatio(A4), maxSide = 200)
+                }
+            }
+            if (selected) {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .offset(x = 6.dp, y = 6.dp)
+                        .size(20.dp)
+                        .background(t.ink, CircleShape)
+                        .border(1.5.dp, t.inkSoft, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Check, null, tint = t.onInk, modifier = Modifier.size(13.dp))
+                }
             }
         }
         Spacer(Modifier.width(14.dp))

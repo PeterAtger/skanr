@@ -44,5 +44,6 @@ object Icons {
     val Plus = strokeIcon("plus", "M12 5v14M5 12h14")
     val Share = strokeIcon("share", "M12 15V3M7 8l5-5 5 5M5 13v6a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6")
     val Rotate = strokeIcon("rotate", "M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5")
+    val Check = strokeIcon("check", "M5.5 12.5l4 4L18.5 7.5", width = 2.2f)
     val Delete = strokeIcon("delete", "M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13")
 }

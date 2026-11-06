@@ -89,7 +89,8 @@ fun PageImage(file: File, modifier: Modifier = Modifier, maxSide: Int = 400, rai
     val bucket = when {
         maxSide <= 200 -> 200
         maxSide <= 500 -> 500
-        else -> 1600
+        maxSide <= 1600 -> 1600
+        else -> 2400
     }
     val bitmap by produceState(Thumbs.peek("${file.path}@$bucket"), file.path, bucket) {
         value = Thumbs.load(file, bucket)
@@ -98,10 +99,10 @@ fun PageImage(file: File, modifier: Modifier = Modifier, maxSide: Int = 400, rai
     var m = modifier
     if (raised) m = m.shadow(10.dp, shape, ambientColor = Color(0x552A1A10), spotColor = Color(0x552A1A10))
     Box(
-        m.clip(shape).background(t.page).border(1.dp, t.rule, shape),
+        m.clip(shape).background(t.sheet).border(1.dp, t.rule, shape),
     ) {
         bitmap?.let {
-            Image(it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
+            Image(it, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.matchParentSize())
         }
     }
 }

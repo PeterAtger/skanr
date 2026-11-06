@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -50,6 +50,7 @@ fun NameScreen(pages: List<File>, onAddPages: () -> Unit, onDiscard: () -> Unit,
     var suggestions by remember { mutableStateOf<List<String>?>(null) }
     var confirmDiscard by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
+    var viewing by remember { mutableStateOf<Int?>(null) }
     val first = pages.firstOrNull()
 
     LaunchedEffect(first?.path) {
@@ -69,9 +70,15 @@ fun NameScreen(pages: List<File>, onAddPages: () -> Unit, onDiscard: () -> Unit,
                 contentPadding = PaddingValues(horizontal = 22.dp, vertical = 18.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                items(pages, key = { it.path }) { page ->
-                    val ratio = remember(page.path) { pageRatio(page) }
-                    PageImage(page, Modifier.height(124.dp).aspectRatio(ratio), maxSide = 500)
+                itemsIndexed(pages, key = { _, page -> page.path }) { index, page ->
+                    PageImage(
+                        page,
+                        Modifier
+                            .height(124.dp)
+                            .aspectRatio(A4)
+                            .clickable { viewing = index },
+                        maxSide = 500,
+                    )
                 }
             }
             Column(Modifier.padding(horizontal = 22.dp, vertical = 8.dp)) {
@@ -119,6 +126,8 @@ fun NameScreen(pages: List<File>, onAddPages: () -> Unit, onDiscard: () -> Unit,
             }
         }
     }
+
+    viewing?.let { PageViewer(pages, it) { viewing = null } }
 
     if (confirmDiscard) {
         ConfirmDialog(
